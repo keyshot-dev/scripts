@@ -58,6 +58,8 @@ DECLARE @mediaFormatId INT,
     @width INT,
     @height INT,
     @settings NVARCHAR(1024),
+    @iccProfile NVARCHAR(512),
+    @colorSpaceEnum NVARCHAR(1),
     @extension NVARCHAR(10),
     @details NVARCHAR(MAX),
     @formatId INT,
@@ -80,6 +82,7 @@ CREATE TABLE #mediaFormatsToProcess(
     width INT,
     height INT,
     settings NVARCHAR(1024),
+    icc_profile NVARCHAR(512),
     no_security_folder nvarchar(max),
     pre_generate_folders nvarchar(max)
 );
@@ -196,7 +199,7 @@ END
 -- Try migrating each media format that isn't already migrated.
 INSERT INTO #mediaFormatsToProcess
 SELECT mf.media_formatid, mf.media_format_typeid, mfl.medianame, mf.download_replace_mask,
-       mf.audiobitrate, mf.videobitrate, mf.width, mf.height, mf.settings,
+       mf.audiobitrate, mf.videobitrate, mf.width, mf.height, mf.settings, mf.icc_profile,
 
        coalesce((select json_arrayagg(t.LayoutfolderId)
                  from (select distinct LPD.LayoutfolderId
@@ -238,6 +241,7 @@ BEGIN
            @width=width,
            @height=height,
            @settings=settings,
+           @iccProfile=icc_profile,
            @pre_generate_folders=pre_generate_folders,
            @no_security_folder=no_security_folder
     FROM #mediaFormatsToProcess;
@@ -262,6 +266,15 @@ BEGIN
     -- Escape backslashes and double-quotes to ensure that the corresponding string is a valid JSON string.
     SET @settings = REPLACE(@settings, '\', '\\');
     SET @settings = REPLACE(@settings, '"', '\u0022');
+    
+    -- Enum values correspond with 'Libs/LegacyService.Shared/Enums/Images/CMYKAllowedColorSpace.cs'
+    SET @colorSpaceEnum = '0'; -- Preserve
+    IF CHARINDEX('%iccconversion%', @settings) > 0 AND @iccProfile IS NOT NULL
+        BEGIN;
+            IF @iccProfile = 'AdobeRGB1998.icc' SET @colorSpaceEnum = '1';
+            ELSE IF @iccProfile = 'sRGB.icc' SET @colorSpaceEnum = '2';
+            ELSE IF @iccProfile = 'Generic_CMYK.icc' SET @colorSpaceEnum = '3';
+        END;
 
     -- Get the new format details.
     IF @extension='jpg' OR @extension='jpeg'
@@ -269,7 +282,7 @@ BEGIN
         SET @extension='jpeg';
         SET @details = '{"type":"JpegImageFormat",' +
                         '"BackgroundColor":"transparent",' +
-                        '"ColorSpace":0,' +
+                        '"ColorSpace":' + @colorSpaceEnum + ',' +
                         '"Quality":0,' +
                         '"TargetMaxSize":null,' +
                         '"Interlace":true,' +
@@ -298,7 +311,7 @@ BEGIN
     ELSE IF @extension='png'
     BEGIN
         SET @details = '{"type":"PngImageFormat",' +
-                        '"ColorSpace":0,' +
+                        '"ColorSpace":' + @colorSpaceEnum + ',' +
                         '"CompressionLevel":7,' +
                         '"Interlace":true,' +
                         '"BackgroundColor":"transparent",' +
@@ -327,7 +340,7 @@ BEGIN
     ELSE IF @extension='webp'
     BEGIN
         SET @details = '{"type":"WebPImageFormat",' +
-                        '"ColorSpace":0,' +
+                        '"ColorSpace":' + @colorSpaceEnum + ',' +
                         '"Quality":0,' +
                         '"BackgroundColor":"transparent",' +
                         '"CropWidth":0,' +
@@ -355,7 +368,7 @@ BEGIN
     ELSE IF @extension='avif'
     BEGIN
         SET @details = '{"type":"AvifImageFormat",' +
-                        '"ColorSpace":0,' +
+                        '"ColorSpace":' + @colorSpaceEnum + ',' +
                         '"Quality":0,' +
                         '"BackgroundColor":"transparent",' +
                         '"CropWidth":0,' +
@@ -384,7 +397,7 @@ BEGIN
     BEGIN
         SET @extension='tiff';
         SET @details = '{"type":"TiffImageFormat",' +
-                        '"ColorSpace":0,' +
+                        '"ColorSpace":' + @colorSpaceEnum + ',' +
                         '"BackgroundColor":"transparent",' +
                         '"CropWidth":0,' +
                         '"CropHeight":0,' +
