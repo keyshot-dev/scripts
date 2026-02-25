@@ -1,5 +1,6 @@
 -- This script will migrate from an existing master item reference field to asset relations. 
 -- Be aware that it will remove any existing relations for the specified relation type.
+-- Works for DAM 6.3.
 
 -- Set these variables
 declare @sourceMasterItemReferenceFieldItemGuid uniqueidentifier = '';
