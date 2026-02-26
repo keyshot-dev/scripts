@@ -5,6 +5,7 @@
 -- Set these variables
 declare @sourceMasterItemReferenceFieldItemGuid uniqueidentifier = '';
 declare @targetAssetRelationTypeId int = 0;
+declare @includeReplacedAssets bit = 0;
 
 -- Script starts here
 begin transaction;
@@ -16,19 +17,17 @@ if not exists (select *
                where i.ItemGuid = @sourceMasterItemReferenceFieldItemGuid
                  and imf.ItemDatatypeid = 80
                  and imf.autotranslateoverwriteexisting = 1)
-    begin
+    begin;
         throw 51000, 'The specified metafield either does not exist, it is not a MasterItemReference field or it doesn''t have autotranslateoverwriteexisting enabled', 1;
     end
-
 
 -- Verify that the target asset relation type exists
 if not exists (select *
                from LegacyService_AssetRelationTypes r
                where r.id = @targetAssetRelationTypeId)
-    begin
+    begin;
         throw 51000, 'The specified asset relation type does not exist.', 1;
     end
-
 
 -- Get the label_id to migrate values from
 declare @source_label_id int = (select iml.ItemMetafieldLabelid
@@ -43,7 +42,6 @@ declare @source_label_id int = (select iml.ItemMetafieldLabelid
 declare @asset_relation_multiplicity int = (select multiplicity
                                             from LegacyService_AssetRelationTypes
                                             where id = @targetAssetRelationTypeId);
-
 
 -- Remove any existing relations for this type to avoid having to deal with duplicates.
 delete
@@ -61,7 +59,9 @@ select primary_asset.assetid        as primary_asset_id,
 from LegacyService_ItemMetafieldValues imv
          join LegacyService_Assets primary_asset on imv.itemid = primary_asset.ItemId
          join LegacyService_Assets secondary_asset on imv.RefItemid = secondary_asset.ItemId
-where imv.ItemMetafieldLabelid = @source_label_id;
+where imv.ItemMetafieldLabelid = @source_label_id
+  and IIF(@includeReplacedAssets = 1, (1 = 1),
+          (primary_asset.ReplacedWith is null and secondary_asset.ReplacedWith is null));
 
 -- Verify that we don't break any asset category constraints -- Primary direction
 if exists(select *

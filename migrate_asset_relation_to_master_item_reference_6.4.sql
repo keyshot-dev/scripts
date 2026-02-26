@@ -5,6 +5,7 @@
 -- Set these variables
 declare @targetMasterItemReferenceFieldItemGuid uniqueidentifier = '';
 declare @sourceAssetRelationTypeId int = 0;
+declare @includeReplacedAssets bit = 0;
 
 -- Script starts here
 begin transaction;
@@ -16,7 +17,7 @@ if not exists (select *
                where i.ItemGuid = @targetMasterItemReferenceFieldItemGuid
                  and imf.ItemDatatypeid = 80
                  and imf.Autotranslateoverwriteexisting = 1)
-    begin
+    begin;
         throw 51000, 'The specified metafield either does not exist, it is not a MasterItemReference field or it doesn''t have autotranslateoverwritingexisting enabled', 1;
     end
 
@@ -25,7 +26,7 @@ if not exists (select *
 if not exists (select *
                from LegacyService_AssetRelationTypes r
                where r.id = @sourceAssetRelationTypeId)
-    begin
+    begin;
         throw 51000, 'The specified asset relation type does not exist.', 1;
     end
 
@@ -46,7 +47,10 @@ with labels as (select iml.ItemMetafieldLabelid
                    from LegacyService_AssetRelations r
                             join LegacyService_Assets primary_asset on r.PrimaryAssetId = primary_asset.assetid
                             join LegacyService_Assets secondary_asset on r.SecondaryAssetId = secondary_asset.assetid
-                   where r.AssetRelationTypeId = @sourceAssetRelationTypeId)
+                   where r.AssetRelationTypeId = @sourceAssetRelationTypeId
+                     and (@includeReplacedAssets = 1
+                       or (primary_asset.ReplacedWith is null and secondary_asset.ReplacedWith is null))
+    )
 insert
 into LegacyService_ItemMetafieldValues (ItemMetafieldLabelid, Itemid, RefItemid, Value, DateModified, ValueInt, DataTypeId)
 select ItemMetafieldLabelid, itemid, ref_itemid, ref_itemid, getdate(), ref_itemid, 80
