@@ -16,7 +16,7 @@ if not exists (select *
                where i.ItemGuid = @sourceMasterItemReferenceFieldItemGuid
                  and imf.ItemDatatypeid = 80
                  and imf.autotranslateoverwriteexisting = 1)
-    begin
+    begin;
         throw 51000, 'The specified metafield either does not exist, it is not a MasterItemReference field or it doesn''t have autotranslateoverwriteexisting enabled', 1;
     end
 
@@ -25,7 +25,7 @@ if not exists (select *
 if not exists (select *
                from LegacyService_AssetRelationTypes r
                where r.id = @targetAssetRelationTypeId)
-    begin
+    begin;
         throw 51000, 'The specified asset relation type does not exist.', 1;
     end
 
