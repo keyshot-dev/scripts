@@ -5,6 +5,7 @@
 -- Set these variables
 declare @sourceMasterItemReferenceFieldItemGuid uniqueidentifier = '';
 declare @targetAssetRelationTypeId int = 0;
+declare @includeReplacedAssets bit = 0;
 
 -- Script starts here
 begin transaction;
@@ -20,7 +21,6 @@ if not exists (select *
         throw 51000, 'The specified metafield either does not exist, it is not a MasterItemReference field or it doesn''t have autotranslateoverwriteexisting enabled', 1;
     end
 
-
 -- Verify that the target asset relation type exists
 if not exists (select *
                from asset_relation_types r
@@ -28,10 +28,6 @@ if not exists (select *
     begin;
         throw 51000, 'The specified asset relation type does not exist.', 1;
     end
-
-
-    
-    
     
 -- Get the label_id to migrate values from
 declare @source_label_id int = (select iml.item_metafield_labelid
@@ -46,7 +42,6 @@ declare @asset_relation_multiplicity int = (select multiplicity
                                             from asset_relation_types
                                             where id = @targetAssetRelationTypeId);
 
-
 -- Remove any existing relations for this type to avoid having to deal with duplicates.
 delete from asset_relations where asset_relation_type_id = @targetAssetRelationTypeId;
 
@@ -59,7 +54,9 @@ select primary_asset.assetid        as primary_asset_id,
 from item_metafield_value imv
          join asset primary_asset on imv.itemid = primary_asset.item_id
          join asset secondary_asset on imv.ref_itemid = secondary_asset.item_id
-where imv.item_metafield_labelid = @source_label_id;
+where imv.item_metafield_labelid = @source_label_id
+    and (@includeReplacedAssets = 1
+    or (primary_asset.ReplacedWith is null and secondary_asset.ReplacedWith is null));
 
 -- Verify that we don't break any asset category constraints -- Primary direction
 if exists(select * from asset_relation_type_primary_asset_categories where asset_relation_type_id = @targetAssetRelationTypeId)

@@ -5,6 +5,7 @@
 -- Set these variables
 declare @targetMasterItemReferenceFieldItemGuid uniqueidentifier = '';
 declare @sourceAssetRelationTypeId int = 0;
+declare @includeReplacedAssets bit = 0;
 
 -- Script starts here
 begin transaction;
@@ -46,7 +47,10 @@ with labels as (select iml.ItemMetafieldLabelid
                    from LegacyService_AssetRelations r
                             join LegacyService_Assets primary_asset on r.PrimaryAssetId = primary_asset.assetid
                             join LegacyService_Assets secondary_asset on r.SecondaryAssetId = secondary_asset.assetid
-                   where r.AssetRelationTypeId = @sourceAssetRelationTypeId)
+                   where r.AssetRelationTypeId = @sourceAssetRelationTypeId
+                     and (@includeReplacedAssets = 1
+                       or (primary_asset.ReplacedWith is null and secondary_asset.ReplacedWith is null))
+    )
 insert
 into LegacyService_ItemMetafieldValues (ItemMetafieldLabelid, Itemid, RefItemid, Value, DateModified, ValueInt, DataTypeId)
 select ItemMetafieldLabelid, itemid, ref_itemid, ref_itemid, getdate(), ref_itemid, 80
